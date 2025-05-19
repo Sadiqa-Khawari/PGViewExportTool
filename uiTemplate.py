@@ -10,7 +10,7 @@ import sys # Käynnistysargumentit
 from PySide6 import QtWidgets # Qt-vimpaimet
 
 # Mainwindow-ui:n tilalle käännetyn pääikkunan tiedoston nimi
-# ilman .p
+# ilman .py-tiedostopäätettä
 from mainWindow_ui import Ui_MainWindow # Käännetyn käyttöliittymän luokka
 
 # Määritellään luokka, joka perii QMainWindow- ja Ui_MainWindow-luokan
