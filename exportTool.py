@@ -51,6 +51,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.errorText = ""
         self.errorDetails = ""
 
+        # Oletustallennushakemisto
+        self.defaultFolder = f'{os.path.expanduser('~')}\\Documents\\'
+
         # OHJELMOIDUT SIGNAALIT
         # ---------------------
 
@@ -60,17 +63,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.ui.testConnectionPushButton.clicked.connect(self.connectDb)
         
-        # TODO: Kun poistutaan objektityypin valinnasta, haetaan tyypin objketilista
-        # ja päivitetään objektin nimi -valinnat ISSUE 13
+        # Kun poistutaan objektityypin valinnasta, haetaan tyypin objketilista
+        # ja päivitetään objektin nimi -valinnat 
         self.ui.objectTypeComboBox.currentIndexChanged.connect(self.getObjectNames)
 
 
         # TODO: Kun poistutaan / valinta on muuttunut objektilistasta 
         # näyteään päivitetään esikatselu ja näytetään Tallenna-painike
-        self.ui.getDataPushButton.clicked.connect(self.updatePreview)
+        self.ui.objectNameComboBox.currentIndexChanged.connect(self.updatePreview)
+        # self.ui.getDataPushButton.clicked.connect(self.updatePreview)
 
-        # TODO: Tallennuspainikkeen painaminen käynnistää tallennusdialogin ISSUE 9
-
+        # Tallennuspainikkeen painaminen käynnistää tallennusdialogin ISSUE 9
+        self.ui.exportPushButton.clicked.connect(self.saveToCSVFile)
         
    
    
@@ -120,11 +124,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.openWarning()
         
 
-    # TODO: Tee slotti, joka hakee information_schema-nimiavaruudesta listan
-    # tietokantaobjekteista, jotka eivät ole information_schemassa tai pg_catalogissa
-    #  a) tee  kysely ensin SQL-kielellä PGAdminissa ja kokeile
-    #  b) käytä filterColumnsFromTable metodia tietojen hakemiseen ja tallenna ne
-    #     pääohjelmaan muuttujaan self.tablesAndViews
+    # Haetaan järjestelmätaulusta tietokantaobjektien (taulujen ja näkymien) nimet
     def getObjectNames(self):
 
         # Muodostetaan asetussanakirja
@@ -143,7 +143,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             filterText  = f"table_type = '{tableType}' AND table_schema NOT IN ('information_schema', 'pg_catalog')"
 
-            objectNames = dbConnection.filterDistinctColumsFromTable(table,columns,filterText)
+            objectNames = dbConnection.filterColumsFromTable(table,columns,filterText)
             self.ui.statusbar.showMessage('Haettiin tietokantaobjektien nimet')
             
             print(objectNames)
@@ -179,44 +179,104 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         
         # Luetaan valitun tietokantaobjektin skeema ja nimi
         currentObjectSelection = self.ui.objectNameComboBox.currentText()
+
+        # Nollataan taulukko tyhjäksi
+        if currentObjectSelection == 'Valitse' or currentObjectSelection == '' :
+            self.ui.previewTableWidget.clear()
+            self.ui.previewTableWidget.setColumnCount(0)
+            self.ui.previewTableWidget.setRowCount(0)
+        else:
+            # Luodaan tietokantayhteysolio
+            try:
+                dbConnection = dbOperations.DbConnection(settingsDictionary)
+                self.resultSet = dbConnection.readAllColumnsFromTable(currentObjectSelection)
+                print(self.resultSet)
         
-        # Luodaan tietokantayhteysolio
-        try:
-            dbConnection = dbOperations.DbConnection(settingsDictionary)
-            self.resultSet = dbConnection.readAllColumnsFromTable(currentObjectSelection)
-            print(self.resultSet)
-    
-        except:
-            pass
+            except:
+                pass
         
 
-        # Tyhjennetään vanhat tiedot käyttöliittymästä ennen uusien lukemista tietokannasta
-        self.ui.previewTableWidget.clear()
+            # Tyhjennetään vanhat tiedot käyttöliittymästä ennen uusien lukemista tietokannasta
+            self.ui.previewTableWidget.clear()
 
-        # Määritellään taulukkoelementin otsikot
-        try:
-            # Tulosjoukon rivimäärä
-            numberOfRows = len(self.resultSet)
-            self.ui.previewTableWidget.setRowCount(numberOfRows)
+            # Määritellään taulukkoelementin otsikot
+            try:
+                # Tulosjoukon rivimäärä
+                numberOfRows = len(self.resultSet)
+                self.ui.previewTableWidget.setRowCount(numberOfRows)
 
-            # Tulosjoukon sarakemäärä
-            columnCount = len(self.resultSet[0])
-            self.ui.previewTableWidget.setColumnCount(columnCount)
-            dbConnection = dbOperations.DbConnection(settingsDictionary)
-            headerRow = dbConnection.getColumnNames(currentObjectSelection)
-            self.ui.previewTableWidget.setHorizontalHeaderLabels(headerRow)
-        
-        except Exception as e:
-            raise e
-        
-        # Asetetaan taulukon solujen arvot
-        for row in range(numberOfRows): # Luetaan listaa riveittäin
-            for column in range(len(self.resultSet[row])): # Luetaan monikkoa sarakkeittain
-                
-                # Muutetaan merkkijonoksi ja QTableWidgetItem-olioksi
-                data = QtWidgets.QTableWidgetItem(str(self.resultSet[row][column])) 
-                self.ui.previewTableWidget.setItem(row, column, data)
+                # Tulosjoukon sarakemäärä
+                columnCount = len(self.resultSet[0])
+                self.ui.previewTableWidget.setColumnCount(columnCount)
+                dbConnection = dbOperations.DbConnection(settingsDictionary)
+
+                # Selvitetään sarakeotsikot ja päivitetään muuttujat
+                headerRow = dbConnection.getColumnNames(currentObjectSelection)
+                self.columnNamesList = headerRow
                 self.ui.previewTableWidget.setHorizontalHeaderLabels(headerRow)
+            
+            except Exception as e:
+                # TODO: Kutsu virhedialogia
+                raise e
+            
+            # Asetetaan taulukon solujen arvot
+            for row in range(numberOfRows): # Luetaan listaa riveittäin
+                for column in range(len(self.resultSet[row])): # Luetaan monikkoa sarakkeittain
+                    
+                    # Muutetaan merkkijonoksi ja QTableWidgetItem-olioksi
+                    data = QtWidgets.QTableWidgetItem(str(self.resultSet[row][column])) 
+                    self.ui.previewTableWidget.setItem(row, column, data)
+                    self.ui.previewTableWidget.setHorizontalHeaderLabels(headerRow)
+    
+
+    def createCSVdata(self, separator=';', textIdentifier='"'):
+
+        # Luodaan CSV-tiedoston otsikot
+        headerRow = ''
+        for item in self.columnNamesList:
+            headerRow = headerRow + item + separator
+
+        # Poistetaan otsikkorivin viimeinen erotinmerkki
+        headerRow = headerRow[:-1] # Poistetaan viimeisen sarakkeen jälkeen tuleva erotinmerkki
+        headerRow = headerRow + '\\n' # Lisätään rivinvaihto 
+
+        dataRows = ''
+        dataRow = ''
+        for row in self.resultSet:
+            print('Rivi', row)
+            for columnValue in row:
+                print('Sarake', columnValue)
+                columnValue = str(columnValue)
+                dataRow = dataRow + columnValue + separator
+            dataRow = dataRow[:-1]
+            dataRows = dataRows + dataRow + '\\n'
+        
+
+        print('Otsikot:', headerRow)
+        print('Data', dataRows)
+
+    # Tallennus CSV-tiedostoksi
+    def saveToCSVFile(self):
+        
+        # Avataan tallennusdialogi oletuskanisona on käyttäjän tiedostot-kansio
+        defaultFileName = f'{self.defaultFolder}{self.ui.objectNameComboBox.currentText()}'
+        csvFileNameAndType = QtWidgets.QFileDialog.getSaveFileName(self, "Tallenna tiedosto",
+                           defaultFileName,
+                           ("CSV files (*.csv);;TSV files (*.tsv);;Text files (*.txt)"))
+ 
+        # Otetaan monikosta polku ja tiedoston nimi
+        csvFileName = csvFileNameAndType[0]
+
+        data = f"'Erkki'; 'Esimerkki'; 55 \\n"
+
+        # Avataan tiedosto kirjoittamista varten
+        self.createCSVdata(';', '"')
+        with open(csvFileName, 'wt') as fileToWrite:
+            fileToWrite.write(data)
+
+        # Nollataan tiedot onnistuneen tallennuksen jälkeen
+        self.resultSet = []
+        self.columnNamesList = []
 
     # Virheilmoitusdialogi
     def openWarning(self):
