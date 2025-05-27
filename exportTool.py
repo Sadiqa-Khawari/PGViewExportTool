@@ -51,7 +51,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.errorText = ""
         self.errorDetails = ""
 
-        # Oletustallennushakemisto
+        # CSV-tiedostojen oletustallennushakemisto
         self.defaultFolder = f'{os.path.expanduser('~')}\\Documents\\'
 
         # CSV-asetusten oletusarvot
@@ -66,13 +66,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # OHJELMOIDUT SIGNAALIT
         # ---------------------
 
-        # Kun painetaan Testaa-painiketta, näytetään tilarivillä tulos ja
-        # päivtetään objektityypin valinnat. Jos virhe, näyteään msgbox
-        # Painike asettaa tietokantaparametrit ja yhteysmerkkijonon
-
+        # Kun tietokannan nimeä muutetaan, tyhjennetään tietokannan yhdistelmäruudun vanhat arvot
         self.ui.databaseLineEdit.textChanged.connect(self.resetUi)
 
+        # Yhteyden testauspainikella muodostetaan yhteys tietokantaan ja päivitetään tilariviä
         self.ui.testConnectionPushButton.clicked.connect(self.connectDb)
+
+        # Kun tietokannan nimi valitaan haetaan siihen liittyvät objektityypit
         self.ui.databaseComboBox.currentIndexChanged.connect(self.getObjectTypesFromDbCombo)
         
         # Kun poistutaan objektityypin valinnasta, haetaan tyypin objketilista
@@ -80,12 +80,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ui.objectTypeComboBox.currentIndexChanged.connect(self.getObjectNames)
 
 
-        # TODO: Kun poistutaan / valinta on muuttunut objektilistasta 
-        # näyteään päivitetään esikatselu ja näytetään Tallenna-painike
+        # Kun poistutaan / valinta on muuttunut objektilistasta 
+        # päivitetään esikatselu ja näytetään Tallenna-painike
         self.ui.objectNameComboBox.currentIndexChanged.connect(self.updatePreview)
-        # self.ui.getDataPushButton.clicked.connect(self.updatePreview)
 
-        # Tallennuspainikkeen painaminen käynnistää tallennusdialogin ISSUE 9
+        # Tallennuspainikkeen painaminen käynnistää tallennusdialogin 
         self.ui.exportPushButton.clicked.connect(self.saveToCSVFile)
 
         # Erottimen valinnan signaalit
@@ -106,26 +105,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
    
     # OHJELMOIDUT SLOTIT
     # ------------------
+
+    # Tyhjennetään käyttöliittymästä edellisen yhteyden tiedot
     def resetUi(self):
         self.ui.databaseComboBox.clear()
         
-
+    # Muodostetaan yhteys tietokantaan syötettyjen tietojen perusteella
     def connectDb(self):
+
         # Päivitetään tietokantaan liittyvät ominaisuudet syötettyjen tietojen perusteella
         self.serverName = self.ui.serverLineEdit.text()
         self.portNumber = self.ui.portLineEdit.text()
+        self.databaseName = self.ui.databaseLineEdit.text()
         self.userName = self.ui.userNameLineEdit.text()
         self.password = self.ui.passwordLineEdit.text()
-
-        # self.resetTypeAndName()
-
-        # Tarkistetaan onko valittuna järjestelmätietokanta postgres
-        if self.ui.databaseLineEdit.text() == 'postgres':
-            self.databaseName = 'postgres'
-        else:
-            self.databaseName = self.ui.databaseLineEdit.text()
-
-        
+              
 
         # Muodostetaan asetussanakirja
         settingsDictionary = {'server': self.serverName,
@@ -146,7 +140,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 filterText = f"datistemplate = false"
 
                 databaseNames = dbConnection.filterDistinctColumsFromTable(table,columns,filterText)
-                self.ui.statusbar.showMessage('Haettiin tietokantojen nimet')
+
+                # Näytetään eteneminen tilarivill
+                self.ui.statusbar.showMessage('Haettiin hallintatietokannasta käyttäjätietokantojen nimet')
                 
                 # Tehdään monikkolistasta merkkijonolista
                 self.ui.databaseComboBox.clear() # Tyhjentää vanhat vaihtoehdot
@@ -158,14 +154,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 # Lisätään lista yhdistelmäruutuun
                 self.ui.databaseComboBox.addItems(cleanedDatabaseNameList)
 
-            except:
-                pass
+            # Jos tapahtuu virhe, näytetään virhedialogi
+            except Exception as e:
+                self.errorWindowTitle = 'Yhteys tietokantaan ei onnistunut'
+                self.errorText = 'Yhteyden muodostuksessa tapahtui virhe'
+                self.errorDetails = str(e)
+                self.openWarning()
         
-        # Jos tietokannan nimeksi on annettu käyttäjätietokanta, haetaan objektit
+        # Jos tietokannan nimeksi on annettu käyttäjätietokanta, haetaan objektien tyypit objetktityyppi yhdistelmäruutuun
         else:
 
         # Luodaan tietokantayhteysolio
             try:
+                
+                # Haetaan tietokantaobjektien tyypit käyttäen distinct-määrettä
                 dbConnection = dbOperations.DbConnection(settingsDictionary)
                 table = 'information_schema.tables'
                 columns = ['table_type']
@@ -183,7 +185,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 
                 # Lisätään lista yhdistelmäruutuun
                 self.ui.objectTypeComboBox.addItems(cleanedObjectTypeList)
-                print(self.databaseName)
+                
             except Exception as e:
                 self.errorWindowTitle = 'Yhteys tietokantaan ei onnistunut'
                 self.errorText = 'Yhteyden muodostuksessa tapahtui virhe'
@@ -196,10 +198,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         if self.ui.databaseLineEdit.text() == 'postgres':
             self.databaseName = self.ui.databaseComboBox.currentText()
-            print('Jos postgres', self.databaseName)
+            
         else:
             self.databaseName = self.ui.databaseLineEdit.text()
-            print('Muu', self.databaseName)
+            
 
 
         # Muodostetaan asetussanakirja
@@ -212,7 +214,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
          # Luodaan tietokantayhteysolio
         try:
             dbConnection = dbOperations.DbConnection(settingsDictionary)
-            print('Asetukset', settingsDictionary)
             table = 'information_schema.tables'
             columns = ['table_schema','table_name']
             tableType = self.ui.objectTypeComboBox.currentText()
@@ -234,7 +235,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             
             # Lisätään lista yhdistelmäruutuun
             self.ui.objectNameComboBox.addItems(cleanedObjectNameList)
-            print(self.databaseName)
         
         except Exception as e:
             self.errorWindowTitle = 'Yhteys tietokantaobjektien haku ei onnistunut'
@@ -256,7 +256,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         'password': self.password}
             
             # Luodaan tietokantayhteysolio
-            # Luodaan tietokantayhteysolio
             try:
                 dbConnection = dbOperations.DbConnection(settingsDictionary)
                 table = 'information_schema.tables'
@@ -264,7 +263,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 filterText = f"table_schema NOT IN ('information_schema', 'pg_catalog')"
 
                 objectTypes = dbConnection.filterDistinctColumsFromTable(table,columns,filterText)
-                self.ui.statusbar.showMessage('Yhteyden muodostus tietokantaan onnistui')
+                self.ui.statusbar.showMessage('Tietokantaobjektien tyypit haettiin')
 
                 # Tehdään monikkolistasta merkkijonolista
                 self.ui.objectTypeComboBox.clear() # Tyhjentää vanhat vaihtoehdot
@@ -275,11 +274,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 
                 # Lisätään lista yhdistelmäruutuun
                 self.ui.objectTypeComboBox.addItems(cleanedObjectTypeList)
-                print(self.databaseName)
+                
             
             except Exception as e:
                 self.errorWindowTitle = 'Yhteys tietokantaobjektien haku ei onnistunut'
-                self.errorText = 'Objektien nimien haku ei onnistunut'
+                self.errorText = 'Objektientyyppien haussa tapahtui virhe.'
                 self.errorDetails = str(e)
                 self.openWarning()
 
@@ -310,10 +309,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             try:
                 dbConnection = dbOperations.DbConnection(settingsDictionary)
                 self.resultSet = dbConnection.readAllColumnsFromTable(currentObjectSelection)
+                print('ja tulosjoukko on', self.resultSet)
+
+                # Tarkistetaan onko taulussa tai näkymässä dataa
                 
-        
-            except:
-                pass
+                    
+                
+            except Exception as e:
+                if self.resultSet == []:
+                    self.ui.statusbar.showMessage('Taulussa tai näkymässä ei ole dataa')
+
+                else:
+                    self.errorWindowTitle = 'Objektien nimien haku epäonnistui'
+                    self.errorText = 'Objetien nimie hakemisessa tapahtui virhe'
+                    self.errorDetails = str(e)
+                    self.openWarning()
         
 
             # Tyhjennetään vanhat tiedot käyttöliittymästä ennen uusien lukemista tietokannasta
@@ -321,32 +331,38 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # Määritellään taulukkoelementin otsikot
             try:
-                # Tulosjoukon rivimäärä
-                numberOfRows = len(self.resultSet)
-                self.ui.previewTableWidget.setRowCount(numberOfRows)
+                if self.resultSet != []:
+                    # Tulosjoukon rivimäärä
+                    numberOfRows = len(self.resultSet)
+                    self.ui.previewTableWidget.setRowCount(numberOfRows)
 
-                # Tulosjoukon sarakemäärä
-                columnCount = len(self.resultSet[0])
-                self.ui.previewTableWidget.setColumnCount(columnCount)
-                dbConnection = dbOperations.DbConnection(settingsDictionary)
+                    # Tulosjoukon sarakemäärä
+                    columnCount = len(self.resultSet[0])
+                    self.ui.previewTableWidget.setColumnCount(columnCount)
+                    dbConnection = dbOperations.DbConnection(settingsDictionary)
 
-                # Selvitetään sarakeotsikot ja päivitetään muuttujat
-                headerRow = dbConnection.getColumnNames(currentObjectSelection)
-                self.columnNamesList = headerRow
-                self.ui.previewTableWidget.setHorizontalHeaderLabels(headerRow)
-            
+                    # Selvitetään sarakeotsikot ja päivitetään muuttujat
+                    headerRow = dbConnection.getColumnNames(currentObjectSelection)
+                    self.columnNamesList = headerRow
+                    self.ui.previewTableWidget.setHorizontalHeaderLabels(headerRow)
+
+                    for row in range(numberOfRows): # Luetaan listaa riveittäin
+                        for column in range(len(self.resultSet[row])): # Luetaan monikkoa sarakkeittain
+                    
+                            # Muutetaan merkkijonoksi ja QTableWidgetItem-olioksi
+                            data = QtWidgets.QTableWidgetItem(str(self.resultSet[row][column])) 
+                            self.ui.previewTableWidget.setItem(row, column, data)
+                            self.ui.previewTableWidget.setHorizontalHeaderLabels(headerRow)
+                else:
+                    self.ui.statusbar.showMessage('Taulussa tai näkymässä ei ole dataa')
             except Exception as e:
-                # TODO: Kutsu virhedialogia
-                raise e
+                self.errorWindowTitle = 'Taulukon päivittäminen epäonnistui'
+                self.errorText = 'Taulukon päivityksessä tapahtui virhe'
+                self.errorDetails = str(e)
+                self.openWarning()
             
             # Asetetaan taulukon solujen arvot
-            for row in range(numberOfRows): # Luetaan listaa riveittäin
-                for column in range(len(self.resultSet[row])): # Luetaan monikkoa sarakkeittain
-                    
-                    # Muutetaan merkkijonoksi ja QTableWidgetItem-olioksi
-                    data = QtWidgets.QTableWidgetItem(str(self.resultSet[row][column])) 
-                    self.ui.previewTableWidget.setItem(row, column, data)
-                    self.ui.previewTableWidget.setHorizontalHeaderLabels(headerRow)
+            
     
     # Aktivoidaan muu erotin -valinta, jos erotin-kenttää on muokattu
     def forceOtherSeparator(self):
