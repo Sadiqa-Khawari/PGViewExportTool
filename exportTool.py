@@ -309,12 +309,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             try:
                 dbConnection = dbOperations.DbConnection(settingsDictionary)
                 self.resultSet = dbConnection.readAllColumnsFromTable(currentObjectSelection)
-                print('ja tulosjoukko on', self.resultSet)
-
-                # Tarkistetaan onko taulussa tai näkymässä dataa
                 
-                    
-                
+            # Tarkistetaan onko taulussa tai näkymässä dataa    
             except Exception as e:
                 if self.resultSet == []:
                     self.ui.statusbar.showMessage('Taulussa tai näkymässä ei ole dataa')
